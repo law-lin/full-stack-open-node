@@ -5,6 +5,7 @@ const cors = require('cors');
 app.use(express.static('build'));
 app.use(cors());
 const PORT = process.env.PORT || 3001;
+app.listen(PORT);
 console.log(`Server running on port ${PORT}`);
 morgan.token('body', (req, res) => JSON.stringify(req.body));
 app.use(
