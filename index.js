@@ -2,7 +2,7 @@ const express = require('express');
 const app = express();
 const morgan = require('morgan');
 const cors = require('cors');
-
+app.use(express.static('build'));
 app.use(cors());
 const PORT = process.env.PORT || 3001;
 console.log(`Server running on port ${PORT}`);
