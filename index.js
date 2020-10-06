@@ -1,8 +1,13 @@
+require('dotenv').config();
 const express = require('express');
 const app = express();
 const morgan = require('morgan');
+const Person = require('./models/person');
 const cors = require('cors');
+
+// Load middleware
 app.use(express.static('build'));
+app.use(express.json());
 app.use(cors());
 const PORT = process.env.PORT || 3001;
 app.listen(PORT);
@@ -11,7 +16,7 @@ morgan.token('body', (req, res) => JSON.stringify(req.body));
 app.use(
   morgan(':method :url :status :res[content-length] - :response-time ms :body')
 );
-app.use(express.json());
+
 let entries = [
   {
     id: 1,
@@ -36,7 +41,9 @@ let entries = [
 ];
 
 app.get('/api/persons', (req, res) => {
-  res.json(entries);
+  Person.find({}).then((people) => {
+    res.json(people);
+  });
 });
 
 app.get('/info', (req, res) => {
@@ -45,38 +52,68 @@ app.get('/info', (req, res) => {
   );
 });
 
-app.get('/api/persons/:id', (req, res) => {
-  const id = Number(req.params.id);
-
-  const entry = entries.find((entry) => entry.id === id);
-  if (entry) {
-    res.json(entry);
-  } else {
-    res.status(404).end();
-  }
+app.get('/api/persons/:id', (req, res, next) => {
+  Person.findById(req.params.id)
+    .then((person) => {
+      if (person) {
+        res.json(person);
+      } else {
+        res.status(404).end();
+      }
+    })
+    .catch((err) => next(err));
 });
 
-app.delete('/api/persons/:id', (req, res) => {
-  const id = Number(req.params.id);
-  entries = entries.filter((entry) => entry.id !== id);
-  res.status(204).end();
+app.delete('/api/persons/:id', (req, res, next) => {
+  Person.findByIdAndRemove(req.params.id)
+    .then((res) => {
+      res.status(204).end();
+    })
+    .catch((err) => next(err));
 });
 
-app.post('/api/persons', (req, res) => {
-  const id = Math.floor(Math.random() * 1000);
+app.post('/api/persons', (req, res, next) => {
   const body = req.body;
-  const entry = { id, name: body.name, number: body.number };
-  let exists = entries.some((entry) => entry.name === body.name);
   if (body.name === undefined || body.number === undefined) {
     return res.status(400).json({
       error: 'name or number missing',
     });
-  } else if (exists) {
-    return res.status(400).json({
-      error: 'name already exists in the phonebook',
-    });
   }
 
-  entries.push(entry);
-  res.json(entry);
+  const person = new Person({ name: body.name, number: body.number });
+
+  person
+    .save()
+    .then((savedPerson) => savedPerson.toJSON())
+    .then((savedAndFormattedPerson) => res.json(savedAndFormattedPerson))
+    .catch((err) => next(err));
 });
+
+app.put('/api/persons/:id', (req, res) => {
+  const body = req.body;
+
+  const person = {
+    name: body.name,
+    number: body.number,
+  };
+
+  Person.findByIdAndUpdate(req.params.id, person, { new: true })
+    .then((updatedPerson) => {
+      res.json(updatedPerson);
+    })
+    .catch((err) => next(err));
+});
+
+const errorHandler = (err, req, res, next) => {
+  console.error(err.message);
+
+  if (err.name === 'CastError') {
+    return res.status(400).send({ error: 'malformatted id' });
+  } else if (err.name === 'ValidationError') {
+    return res.status(400).json({ error: err.message });
+  }
+
+  next(err);
+};
+
+app.use(errorHandler);
